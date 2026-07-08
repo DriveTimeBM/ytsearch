@@ -440,6 +440,7 @@
   let state = {
     query: "",
     order: settings.order,
+    fetchedOrder: null,
     wantCount: settings.resultCount,
     nextPageToken: null,
     fetchedCount: 0,
@@ -513,9 +514,26 @@
     settings.resultCount = v;
     saveSettings();
   });
-  el("orderSelect").addEventListener("change", ()=>{
-    settings.order = el("orderSelect").value;
+  el("orderSelect").addEventListener("change", async ()=>{
+    const newOrder = el("orderSelect").value;
+    settings.order = newOrder;
     saveSettings();
+
+    if(state.items.length === 0) return; // nothing loaded yet — applies on next search
+
+    if(newOrder === "relevance" && state.fetchedOrder !== "relevance"){
+      setStatus(`Relevance reflects the original search ranking and can't be recomputed locally. Showing the ${state.items.length} loaded results in their current order — run a new search to refresh relevance ranking.`);
+      return;
+    }
+
+    if((newOrder === "viewCount" || newOrder === "rating") && !state.items[0].statistics){
+      setStatus("Fetching view/like counts to sort…");
+      await enrichStatistics();
+    }
+
+    sortItems(newOrder);
+    renderResults();
+    setStatus(`Showing ${state.items.length} result${state.items.length===1?"":"s"} for "${state.query}", sorted by ${orderLabelText(newOrder)}.`);
   });
   document.querySelectorAll("#sizeSeg button").forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -576,6 +594,7 @@
   async function runSearch(q){
     state.query = q;
     state.order = settings.order;
+    state.fetchedOrder = settings.order;
     state.wantCount = settings.resultCount;
     state.nextPageToken = null;
     state.fetchedCount = 0;
@@ -631,12 +650,56 @@
       if(state.items.length === 0){
         setStatus("");
       } else {
+        setStatus(`Fetching view counts…`);
+        await enrichStatistics();
+        sortItems(state.order);
+        renderResults();
         setStatus(`Showing ${state.items.length} result${state.items.length===1?"":"s"} for "${state.query}".`);
       }
     }catch(err){
       setStatus("Network error while contacting the YouTube API.", true);
     }
     state.loading = false;
+  }
+
+  // Fetch view/like counts for loaded items so the sort-by control can resort
+  // everything on-screen locally, without hitting the search endpoint again.
+  async function enrichStatistics(){
+    const idsNeeding = state.items
+      .filter(it => it.id && it.id.videoId && !it.statistics)
+      .map(it => it.id.videoId);
+    if(idsNeeding.length === 0) return;
+    for(let i = 0; i < idsNeeding.length; i += 50){
+      const chunk = idsNeeding.slice(i, i + 50);
+      try{
+        const params = new URLSearchParams({ part: "statistics", id: chunk.join(","), key: getApiKey() });
+        const resp = await fetch("https://www.googleapis.com/youtube/v3/videos?" + params.toString());
+        const data = await resp.json();
+        if(!resp.ok) continue;
+        (data.items || []).forEach(v=>{
+          const match = state.items.find(it => it.id && it.id.videoId === v.id);
+          if(match) match.statistics = v.statistics || {};
+        });
+      }catch(e){ /* sorting by view count / rating just falls back to 0 for these */ }
+    }
+  }
+
+  function sortItems(order){
+    const items = state.items;
+    if(order === "date"){
+      items.sort((a,b)=> new Date(b.snippet.publishedAt) - new Date(a.snippet.publishedAt));
+    } else if(order === "title"){
+      items.sort((a,b)=> a.snippet.title.localeCompare(b.snippet.title));
+    } else if(order === "viewCount"){
+      items.sort((a,b)=> (Number(b.statistics && b.statistics.viewCount) || 0) - (Number(a.statistics && a.statistics.viewCount) || 0));
+    } else if(order === "rating"){
+      items.sort((a,b)=> (Number(b.statistics && b.statistics.likeCount) || 0) - (Number(a.statistics && a.statistics.likeCount) || 0));
+    }
+    // "relevance" has no client-side metric, so it's left in its fetched order.
+  }
+
+  function orderLabelText(v){
+    return { date:"upload date", relevance:"relevance", viewCount:"view count", rating:"likes", title:"title" }[v] || v;
   }
 
   function handleApiError(status, msg){
