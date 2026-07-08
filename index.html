@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="favicon.png" type="image/png">
 <title>Tube Finder — YouTube Search</title>
 <style>
   :root{
@@ -199,7 +201,7 @@
 
   .card-desc{ cursor:pointer; }
   .card-desc:hover{ color:var(--text); }
-  .card-actions{ margin-top:auto; padding-top:8px; }
+  .card-actions{ margin-top:auto; padding-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
   .btn-yt{
     display:inline-flex; align-items:center; gap:6px;
     background:var(--panel-2); border:1px solid var(--line); color:var(--text);
@@ -207,6 +209,8 @@
     text-decoration:none; cursor:pointer;
   }
   .btn-yt:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn-play{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn-play:hover{ background:#ff3d59; border-color:#ff3d59; color:#fff; }
 
   /* ---------- Video drawer (embedded player) ---------- */
   .video-drawer{
@@ -761,12 +765,17 @@
           <div class="card-meta">${formatDate(sn.publishedAt)}${statsParts.length ? " • " + statsParts.join(" • ") : ""}</div>
           <div class="card-desc" title="Click to play">${escapeHtml(sn.description || "")}</div>
           <div class="card-actions">
-            <a class="btn-yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Watch on YouTube</a>
+            <a class="btn-yt btn-play" href="#" data-vid="${vid}">▶ Play here</a>
+            <a class="btn-yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Watch on YouTube ↗</a>
           </div>
         </div>
       `;
       card.querySelector(".thumb-wrap").addEventListener("click", ()=> openLightbox(vid));
       card.querySelector(".card-desc").addEventListener("click", ()=> openVideoDrawer(vid, sn));
+      card.querySelector(".btn-play").addEventListener("click", (e)=>{
+        e.preventDefault();
+        openVideoDrawer(vid, sn);
+      });
       resultsEl.appendChild(card);
     });
   }
