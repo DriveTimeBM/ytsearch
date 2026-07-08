@@ -244,6 +244,30 @@
     grid-column:1/-1; text-align:center; padding:60px 20px; color:var(--text-dim);
   }
   .empty-state .big{ font-size:1.1rem; color:var(--text); margin-bottom:6px; }
+
+  .intro-panel{
+    grid-column:1/-1;
+    max-width:560px;
+    margin:20px auto 40px auto;
+    padding:26px 28px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+  }
+  .intro-panel h2{
+    margin:0 0 16px 0; font-size:1.05rem; color:var(--text);
+    display:flex; align-items:center; gap:8px;
+  }
+  .intro-panel h2 .mark{ color:var(--accent); }
+  .intro-panel ol{ margin:0; padding-left:20px; color:var(--text-dim); font-size:.85rem; line-height:1.7; }
+  .intro-panel li{ margin-bottom:10px; }
+  .intro-panel li strong{ color:var(--text); }
+  .intro-panel .callout{
+    margin-top:16px; padding:12px 14px; border-radius:8px;
+    background:var(--panel-2); border:1px solid var(--accent-dim);
+    font-size:.8rem; color:var(--text); line-height:1.55;
+  }
+  .intro-panel .callout strong{ color:var(--accent); }
   .spinner{
     width:28px; height:28px; border-radius:50%;
     border:3px solid var(--line); border-top-color:var(--accent);
@@ -440,6 +464,23 @@
 
   let settings = loadSettings();
   applySettingsToUI();
+  showIntro();
+
+  function showIntro(){
+    resultsEl.innerHTML = `
+      <div class="intro-panel">
+        <h2><span class="mark">▶</span> How to use Tube Finder</h2>
+        <ol>
+          <li>Type a search term above and hit <strong>Search</strong>.</li>
+          <li>Open <strong>Settings</strong> (⚙) to set how many results to fetch and how big the thumbnails should be.</li>
+          <li>Click a <strong>description</strong> or the <strong>▶ Play here</strong> button to watch a video right in a slide-in player. Use <strong>Watch on YouTube</strong> to open it there instead. Click a thumbnail to see it full-size.</li>
+        </ol>
+        <div class="callout">
+          <strong>Note on Sort by:</strong> the sort option doesn't just reorder what's on screen — for a new search, it changes which videos come back in the first place. <strong>Upload date</strong> fetches the newest matching videos, <strong>View count</strong> fetches the most-viewed ones, and so on, so set it before searching if you can. Once results are loaded, changing it will still re-sort them locally without a new search — except Relevance, which YouTube only ranks at search time.
+        </div>
+      </div>
+    `;
+  }
 
   let state = {
     query: "",
