@@ -453,11 +453,12 @@
     try{
       const raw = localStorage.getItem(LS_SETTINGS);
       if(raw) return Object.assign({resultCount:50, size:"m", order:"date"}, JSON.parse(raw));
-    }catch(e){}
+    }catch(e){ console.warn("localStorage unavailable:", e); }
     return {resultCount:50, size:"m", order:"date"};
   }
   function saveSettings(){
-    localStorage.setItem(LS_SETTINGS, JSON.stringify(settings));
+    try{ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+    catch(e){ console.warn("localStorage unavailable:", e); }
   }
   function applySettingsToUI(){
     el("resultCount").value = settings.resultCount;
@@ -469,9 +470,17 @@
   }
 
   // ---------- API key handling ----------
-  function getApiKey(){ return localStorage.getItem(LS_KEY) || ""; }
-  function setApiKey(k){ localStorage.setItem(LS_KEY, k.trim()); }
-  function clearApiKey(){ localStorage.removeItem(LS_KEY); }
+  function getApiKey(){
+    try{ return localStorage.getItem(LS_KEY) || ""; }
+    catch(e){ console.warn("localStorage unavailable:", e); return ""; }
+  }
+  function setApiKey(k){
+    try{ localStorage.setItem(LS_KEY, k.trim()); return true; }
+    catch(e){ console.warn("localStorage unavailable:", e); return false; }
+  }
+  function clearApiKey(){
+    try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  }
 
   function showApiKeyModal(){ el("apiKeyModal").classList.remove("hidden"); }
   function hideApiKeyModal(){ el("apiKeyModal").classList.add("hidden"); }
@@ -481,9 +490,13 @@
   el("saveApiKeyBtn").addEventListener("click", ()=>{
     const val = el("apiKeyInput").value.trim();
     if(!val){ el("apiKeyInput").focus(); return; }
-    setApiKey(val);
+    const saved = setApiKey(val);
+    if(!saved || getApiKey() !== val){
+      setStatus("Your browser blocked local storage, so the key couldn't be saved and you'll be asked again next time. This usually happens when a page is opened as a local file or with storage/cookies disabled — try hosting it (e.g. GitHub Pages) or enabling site storage.", true);
+    } else {
+      setStatus("");
+    }
     hideApiKeyModal();
-    setStatus("");
   });
   el("apiKeyInput").addEventListener("keydown", (e)=>{
     if(e.key === "Enter"){ e.preventDefault(); el("saveApiKeyBtn").click(); }
@@ -672,13 +685,16 @@
     for(let i = 0; i < idsNeeding.length; i += 50){
       const chunk = idsNeeding.slice(i, i + 50);
       try{
-        const params = new URLSearchParams({ part: "statistics", id: chunk.join(","), key: getApiKey() });
+        const params = new URLSearchParams({ part: "statistics,contentDetails", id: chunk.join(","), key: getApiKey() });
         const resp = await fetch("https://www.googleapis.com/youtube/v3/videos?" + params.toString());
         const data = await resp.json();
         if(!resp.ok) continue;
         (data.items || []).forEach(v=>{
           const match = state.items.find(it => it.id && it.id.videoId === v.id);
-          if(match) match.statistics = v.statistics || {};
+          if(match){
+            match.statistics = v.statistics || {};
+            match.contentDetails = v.contentDetails || {};
+          }
         });
       }catch(e){ /* sorting by view count / rating just falls back to 0 for these */ }
     }
@@ -726,16 +742,23 @@
       const sn = item.snippet;
       if(!vid || !sn) return;
       const thumb = (sn.thumbnails && (sn.thumbnails.medium || sn.thumbnails.default)) || {};
+      const durationText = item.contentDetails ? formatDuration(item.contentDetails.duration) : "";
+      const viewCount = item.statistics ? formatCount(item.statistics.viewCount) : null;
+      const likeCount = item.statistics ? formatCount(item.statistics.likeCount) : null;
+      const statsParts = [];
+      if(viewCount !== null) statsParts.push(`${viewCount} views`);
+      if(likeCount !== null) statsParts.push(`${likeCount} likes`);
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
         <div class="thumb-wrap" data-vid="${vid}">
           <img src="${thumb.url || ''}" alt="${escapeHtml(sn.title)}" loading="lazy">
+          ${durationText ? `<div class="dur">${durationText}</div>` : ""}
         </div>
         <div class="card-body">
           <a class="card-title" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">${escapeHtml(sn.title)}</a>
           <div class="card-channel">${escapeHtml(sn.channelTitle || "")}</div>
-          <div class="card-meta">${formatDate(sn.publishedAt)}</div>
+          <div class="card-meta">${formatDate(sn.publishedAt)}${statsParts.length ? " • " + statsParts.join(" • ") : ""}</div>
           <div class="card-desc" title="Click to play">${escapeHtml(sn.description || "")}</div>
           <div class="card-actions">
             <a class="btn-yt" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">▶ Watch on YouTube</a>
@@ -752,6 +775,28 @@
     if(!iso) return "";
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, {year:"numeric", month:"short", day:"numeric"});
+  }
+
+  // Converts ISO 8601 durations like "PT4M13S" or "PT1H2M15S" into "4:13" / "1:02:15"
+  function formatDuration(iso){
+    if(!iso) return "";
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if(!m) return "";
+    const h = parseInt(m[1] || "0", 10);
+    const min = parseInt(m[2] || "0", 10);
+    const s = parseInt(m[3] || "0", 10);
+    if(h > 0) return `${h}:${String(min).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    return `${min}:${String(s).padStart(2,"0")}`;
+  }
+
+  // Abbreviates large numbers: 12345 -> "12.3K", 4200000 -> "4.2M"
+  function formatCount(n){
+    n = Number(n);
+    if(!n && n !== 0) return null;
+    if(n >= 1000000000) return (n/1000000000).toFixed(1).replace(/\.0$/,"") + "B";
+    if(n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,"") + "M";
+    if(n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,"") + "K";
+    return String(n);
   }
 
   function escapeHtml(str){
