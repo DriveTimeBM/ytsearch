@@ -801,7 +801,7 @@
           ${durationText ? `<div class="dur">${durationText}</div>` : ""}
         </div>
         <div class="card-body">
-          <a class="card-title" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">${escapeHtml(sn.title)}</a>
+          <a class="card-title" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener" title="${escapeHtml(sn.title)}">${escapeHtml(sn.title)}</a>
           <div class="card-channel">${escapeHtml(sn.channelTitle || "")}</div>
           <div class="card-meta">${formatDate(sn.publishedAt)}${statsParts.length ? " • " + statsParts.join(" • ") : ""}</div>
           <div class="card-desc" title="Click to play">${escapeHtml(sn.description || "")}</div>
